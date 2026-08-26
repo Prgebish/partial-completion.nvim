@@ -1,0 +1,17 @@
+.DS_Store
+*.log
+deps/
+.luarocks/
+.luarocks-luajit/
+.nvim/
+coverage/
+tmp/
+
+# Maintainer-only planning and specification documents.
+/AGENTS.md
+/architecture.md
+/code_review*.md
+/features.md
+/research.md
+/task_plan.md
+/spec/

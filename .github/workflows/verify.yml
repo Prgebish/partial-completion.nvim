@@ -1,0 +1,70 @@
+name: verify
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: verify (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Install Linux dependencies and Neovim 0.12.2
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes libluajit-5.1-dev luajit luarocks ripgrep tmux
+          curl -fsSLO https://github.com/neovim/neovim/releases/download/v0.12.2/nvim-linux-x86_64.tar.gz
+          echo "31cf85945cb600d96cdf69f88bc68bec814acbff50863c5546adef3a1bcef260  nvim-linux-x86_64.tar.gz" | sha256sum --check
+          tar -xzf nvim-linux-x86_64.tar.gz
+          echo "$PWD/nvim-linux-x86_64/bin" >> "$GITHUB_PATH"
+
+      - name: Install macOS dependencies
+        if: runner.os == 'macOS'
+        run: |
+          if brew tap | grep -qx 'aws/tap'; then
+            brew untap aws/tap
+          fi
+          brew install neovim luajit luarocks ripgrep tmux
+
+      - name: Install StyLua 2.5.2
+        run: |
+          cargo install stylua --version 2.5.2 --locked
+
+      - name: Verify
+        run: make verify
+
+  windows-portability:
+    name: Windows portability
+    runs-on: windows-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Install Neovim 0.12.2
+        shell: pwsh
+        run: |
+          Invoke-WebRequest `
+            -Uri https://github.com/neovim/neovim/releases/download/v0.12.2/nvim-win64.zip `
+            -OutFile nvim-win64.zip
+          if ((Get-FileHash nvim-win64.zip -Algorithm SHA256).Hash.ToLower() -ne "23fe150edbcc976eabe55092e1e9d2e5e237afde69553d170e936f776b405d53") {
+            throw "Neovim archive checksum mismatch"
+          }
+          Expand-Archive nvim-win64.zip -DestinationPath .
+          "$PWD\nvim-win64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Verify Windows paths and case behavior
+        run: nvim --clean --headless -l scripts/portability.lua
